@@ -4,10 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#0b6e63">
-<title>Video Compressor</title>
+<title>Compress &amp; Convert</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
 <style>
-/* Layout: one narrow column of three steps, thumb-sized controls, result replaces the steps' end. */
+/* Layout: one narrow column; two tabs (Shrink / Convert), each a short stack of numbered steps with thumb-sized controls. */
 :root {
   --bg: #eef2f1;
   --panel: #ffffff;
@@ -36,23 +36,29 @@
   --good: #5fd27f; --bad: #ff8a80; --warn: #f0c060; color-scheme: dark;
 }
 * { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
 body {
-  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
   padding-block: 20px 40px;
 }
+[hidden] { display: none !important; }
 main { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+.view { display: flex; flex-direction: column; gap: 16px; }
 header h1 { font-family: var(--font-display); font-size: 1.75rem; line-height: 1.15; margin: 0; text-wrap: balance; }
 header p { margin: 6px 0 0; color: var(--muted); }
+.tabs { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+.tabs button { border: 0; min-height: 44px; border-radius: 9px; background: transparent; color: var(--muted); }
+.tabs button[aria-selected="true"] { background: var(--accent); color: var(--accent-ink); }
 section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 section h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; display: flex; gap: 10px; align-items: center; }
 .step { font-family: var(--font-display); font-size: 0.8rem; width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
 button, .pick { font: inherit; font-weight: 600; border-radius: 10px; min-height: 48px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
-button:focus-visible, .pick:focus-within, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, .pick:focus-within, input:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); width: 100%; }
 button:disabled { opacity: 0.45; cursor: not-allowed; }
-.pick { display: flex; align-items: center; justify-content: center; text-align: center; border-style: dashed; border-width: 2px; min-height: 64px; }
+.pick { display: flex; align-items: center; justify-content: center; text-align: center; border-style: dashed; border-width: 2px; min-height: 64px; position: relative; }
 .pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
 .facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
 .facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; }
@@ -65,7 +71,9 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .chip span { font-weight: 400; font-size: 0.85rem; color: var(--muted); }
 .chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
 .custom { display: flex; gap: 8px; align-items: center; }
-.custom input { font: inherit; min-height: 48px; width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.custom input, select { font: inherit; min-height: 48px; width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.opts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.opts label { display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; color: var(--muted); min-width: 0; }
 .note { font-size: 0.9rem; color: var(--muted); margin: 0; }
 .note.bad { color: var(--bad); }
 .note.warn { color: var(--warn); }
@@ -73,97 +81,276 @@ button:disabled { opacity: 0.45; cursor: not-allowed; }
 .bar { height: 10px; border-radius: 6px; background: var(--bg); overflow: hidden; border: 1px solid var(--line); }
 .bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.3s linear; }
 .row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; font-size: 0.9rem; color: var(--muted); }
-video { width: 100%; max-height: 50vh; border-radius: 10px; background: #000; }
+video, .preview img { width: 100%; max-height: 50vh; border-radius: 10px; background: #000; object-fit: contain; }
+audio { width: 100%; }
 .actions { display: flex; flex-direction: column; gap: 8px; }
+.filelist { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; }
+.filelist li { display: flex; justify-content: space-between; gap: 12px; min-width: 0; }
+.filelist li span:first-child { overflow-wrap: anywhere; min-width: 0; }
+.filelist li span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.results li { display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.results li:first-child { border-top: 0; padding-top: 0; }
 .how { font-size: 0.85rem; color: var(--muted); }
 .how summary { cursor: pointer; font-weight: 600; color: var(--ink); }
 .how ul { padding-left: 1.2em; margin: 8px 0 0; }
 @media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
-html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
-body { margin: 0; }
-[hidden] { display: none !important; }
 </style>
 </head>
 <body>
-
 <main>
   <header>
-    <h1>Video Compressor</h1>
-    <p>Shrink a video to fit an upload limit. It all happens on this phone, so nothing gets uploaded.</p>
+    <h1>Compress &amp; Convert</h1>
+    <p>Shrink videos to fit upload limits and convert photos, videos and audio. It all happens on this phone, so nothing gets uploaded.</p>
   </header>
 
-  <section aria-labelledby="h-pick">
-    <h2 id="h-pick"><span class="step">1</span>Choose a video</h2>
-    <label class="pick" for="file">
-      <input id="file" type="file" accept="video/*">
-      <span id="pickLabel">Tap to pick from your gallery or files</span>
-    </label>
-    <div id="info" hidden>
-      <p class="fname" id="fname"></p>
-      <dl class="facts">
-        <div><dt>Size</dt><dd id="fsize">–</dd></div>
-        <div><dt>Length</dt><dd id="flen">–</dd></div>
-        <div><dt>Picture</dt><dd id="fres">–</dd></div>
-      </dl>
-    </div>
-    <p class="note bad" id="pickErr" hidden></p>
-  </section>
+  <div class="tabs" role="tablist" aria-label="Tool">
+    <button role="tab" id="tabShrink" aria-controls="viewShrink" aria-selected="true">Shrink a video</button>
+    <button role="tab" id="tabConvert" aria-controls="viewConvert" aria-selected="false">Convert a file</button>
+  </div>
 
-  <section aria-labelledby="h-size">
-    <h2 id="h-size"><span class="step">2</span>Size limit</h2>
-    <div class="chips" role="group" aria-label="Size limit">
-      <button class="chip" id="p10" data-mb="10" aria-pressed="true"><b>10 MB</b><span>Discord (free)</span></button>
-      <button class="chip" id="p18" data-mb="18" aria-pressed="false"><b>18 MB</b><span>Email (25 MB limit)</span></button>
-      <button class="chip" id="p50" data-mb="50" aria-pressed="false"><b>50 MB</b><span>Discord Nitro Basic</span></button>
-      <button class="chip" id="pc" data-mb="custom" aria-pressed="false"><b>Custom</b><span>Type your own</span></button>
-    </div>
-    <div class="custom" id="customRow" hidden>
-      <input id="customMb" type="number" inputmode="decimal" min="1" step="1" placeholder="Size in MB, e.g. 25" aria-label="Custom size limit in MB">
-    </div>
-    <p class="note" id="plan">Pick a video to see how it will be compressed.</p>
-  </section>
-
-  <section aria-labelledby="h-go">
-    <h2 id="h-go"><span class="step">3</span>Compress</h2>
-    <button class="primary" id="go" disabled>Compress video</button>
-    <div id="progress" hidden>
-      <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
-      <div class="row"><span id="pText">Starting…</span><span id="pTime"></span></div>
-      <p class="note">Keep this screen open until it finishes. It plays the video through once, silently, so it takes about as long as the video.</p>
-      <button id="cancel">Cancel</button>
-    </div>
-    <div id="result" hidden>
-      <p class="note" id="rText"></p>
-      <video id="rVideo" controls playsinline></video>
-      <div class="actions">
-        <button class="primary" id="save">Save to phone</button>
-        <button id="smaller" hidden>Try again, a bit smaller</button>
+  <!-- ================= SHRINK ================= -->
+  <div class="view" id="viewShrink" role="tabpanel" aria-labelledby="tabShrink">
+    <section aria-labelledby="h-pick">
+      <h2 id="h-pick"><span class="step">1</span>Choose a video</h2>
+      <label class="pick" for="file">
+        <input id="file" type="file" accept="video/*">
+        <span id="pickLabel">Tap to pick from your gallery or files</span>
+      </label>
+      <div id="info" hidden>
+        <p class="fname" id="fname"></p>
+        <dl class="facts">
+          <div><dt>Size</dt><dd id="fsize">–</dd></div>
+          <div><dt>Length</dt><dd id="flen">–</dd></div>
+          <div><dt>Picture</dt><dd id="fres">–</dd></div>
+        </dl>
       </div>
-      <p class="note" id="saveNote" hidden></p>
-    </div>
-  </section>
+      <p class="note bad" id="pickErr" hidden></p>
+    </section>
 
-  <details class="how">
-    <summary>How it works</summary>
-    <ul>
-      <li>It works out the best quality that fits your limit from the video's length.</li>
-      <li>When the limit is tight it makes the picture smaller (720p, 540p, 480p…) and caps it at 30 frames per second. A smaller sharp picture looks better than a blocky full-size one.</li>
-      <li>Your original video is never changed.</li>
-      <li>On iPhone the result is MP4. On Android it is MP4 on recent Chrome, otherwise WebM (Discord plays both).</li>
-    </ul>
-  </details>
+    <section aria-labelledby="h-size">
+      <h2 id="h-size"><span class="step">2</span>Size limit</h2>
+      <div class="chips" role="group" aria-label="Size limit">
+        <button class="chip" data-mb="10" aria-pressed="true"><b>10 MB</b><span>Discord (free)</span></button>
+        <button class="chip" data-mb="18" aria-pressed="false"><b>18 MB</b><span>Email (25 MB limit)</span></button>
+        <button class="chip" data-mb="50" aria-pressed="false"><b>50 MB</b><span>Discord Nitro Basic</span></button>
+        <button class="chip" id="pc" data-mb="custom" aria-pressed="false"><b>Custom</b><span>Type your own</span></button>
+      </div>
+      <div class="custom" id="customRow" hidden>
+        <input id="customMb" type="number" inputmode="decimal" min="1" step="1" placeholder="Size in MB, e.g. 25" aria-label="Custom size limit in MB">
+      </div>
+      <p class="note" id="plan">Pick a video to see how it will be compressed.</p>
+    </section>
+
+    <section aria-labelledby="h-go">
+      <h2 id="h-go"><span class="step">3</span>Compress</h2>
+      <button class="primary" id="go" disabled>Compress video</button>
+      <div id="progress" hidden>
+        <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+        <div class="row"><span id="pText">Starting...</span><span id="pTime"></span></div>
+        <p class="note">Keep this screen open until it finishes. It plays the video through once, silently, so it takes about as long as the video.</p>
+        <button id="cancel">Cancel</button>
+      </div>
+      <div id="result" hidden>
+        <p class="note" id="rText"></p>
+        <video id="rVideo" controls playsinline></video>
+        <div class="actions">
+          <button class="primary" id="save">Save to phone</button>
+          <button id="smaller" hidden>Try again, a bit smaller</button>
+        </div>
+        <p class="note" id="saveNote" hidden></p>
+      </div>
+    </section>
+
+    <details class="how">
+      <summary>How shrinking works</summary>
+      <ul>
+        <li>It works out the best quality that fits your limit from the video's length.</li>
+        <li>When the limit is tight it makes the picture smaller (720p, 540p, 480p...) and caps it at 30 frames per second. A smaller sharp picture looks better than a blocky full-size one.</li>
+        <li>Your original video is never changed.</li>
+        <li>On iPhone the result is MP4. On Android it is MP4 on recent Chrome, otherwise WebM (Discord plays both).</li>
+      </ul>
+    </details>
+  </div>
+
+  <!-- ================= CONVERT ================= -->
+  <div class="view" id="viewConvert" role="tabpanel" aria-labelledby="tabConvert" hidden>
+    <section aria-labelledby="h-cpick">
+      <h2 id="h-cpick"><span class="step">1</span>Choose files</h2>
+      <label class="pick" for="cfile">
+        <input id="cfile" type="file" accept="image/*,video/*,audio/*,.heic,.heif" multiple>
+        <span id="cpickLabel">Tap to pick photos, a video or audio</span>
+      </label>
+      <ul class="filelist" id="clist" hidden></ul>
+      <p class="note" id="cpickNote" hidden></p>
+    </section>
+
+    <section aria-labelledby="h-cfmt">
+      <h2 id="h-cfmt"><span class="step">2</span>Convert to</h2>
+      <div class="chips" id="cfmts" role="group" aria-label="Convert to"></div>
+      <div class="opts" id="imgOpts" hidden>
+        <label for="cquality">Quality
+          <select id="cquality">
+            <option value="0.92">High</option>
+            <option value="0.8" selected>Medium</option>
+            <option value="0.65">Small file</option>
+          </select>
+        </label>
+        <label for="cmax">Picture size
+          <select id="cmax">
+            <option value="0" selected>Keep original</option>
+            <option value="2048">Up to 2048 px</option>
+            <option value="1080">Up to 1080 px</option>
+            <option value="640">Up to 640 px</option>
+          </select>
+        </label>
+      </div>
+      <p class="note" id="cfmtNote">Pick files to see what they can be converted to.</p>
+    </section>
+
+    <section aria-labelledby="h-cgo">
+      <h2 id="h-cgo"><span class="step">3</span>Convert</h2>
+      <button class="primary" id="cgo" disabled>Convert</button>
+      <div id="cprog" hidden>
+        <div class="bar" aria-hidden="true"><i id="cbar"></i></div>
+        <div class="row"><span id="ctext">Starting...</span><span id="ctime"></span></div>
+        <p class="note" id="cprogNote">Keep this screen open until it finishes.</p>
+        <button id="ccancel">Cancel</button>
+      </div>
+      <p class="note" id="cmsg" hidden></p>
+      <ul class="results" id="cres"></ul>
+    </section>
+
+    <details class="how">
+      <summary>What it can convert</summary>
+      <ul>
+        <li>Photos to JPG, PNG or WebP, several at once, with optional resizing. iPhone HEIC photos work on iPhone; most Android browsers can't open HEIC.</li>
+        <li>A video to MP4 (on Android, WebM if this phone's Chrome can't make MP4), to a GIF (the first 15 seconds, no sound), or just its sound as MP3 or WAV.</li>
+        <li>Audio files to MP3 or WAV. Making MP3 needs an internet connection the first time.</li>
+        <li>Your original files are never changed.</li>
+      </ul>
+    </details>
+  </div>
 </main>
 
 <script>
 (function () {
   const $ = (id) => document.getElementById(id);
   const MB = 1000 * 1000;
+  const fmtMB = (b) => (b / MB).toFixed(b < 10 * MB ? 1 : 0) + " MB";
+  const fmtSize = (b) => b < MB ? Math.max(1, Math.round(b / 1000)) + " KB" : fmtMB(b);
+  const fmtTime = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
+  const baseName = (n) => n.replace(/\.[^.]+$/, "");
+  const canRecord = !!(window.MediaRecorder && HTMLCanvasElement.prototype.captureStream);
+
+  // ---------- tabs (#convert opens the converter directly) ----------
+  function showTab(which) {
+    const conv = which === "convert";
+    $("tabShrink").setAttribute("aria-selected", String(!conv));
+    $("tabConvert").setAttribute("aria-selected", String(conv));
+    $("viewShrink").hidden = conv; $("viewConvert").hidden = !conv;
+  }
+  $("tabShrink").addEventListener("click", () => { showTab("shrink"); history.replaceState(null, "", "#shrink"); });
+  $("tabConvert").addEventListener("click", () => { showTab("convert"); history.replaceState(null, "", "#convert"); });
+  showTab(location.hash === "#convert" ? "convert" : "shrink");
+
+  // ---------- shared helpers ----------
+  function saveBlob(blob, name) {
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob); a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+  }
+
+  function readVideoMeta(f) {
+    return new Promise((resolve, reject) => {
+      const v = document.createElement("video");
+      v.preload = "metadata"; v.muted = true; v.playsInline = true;
+      v.onloadedmetadata = () => {
+        const d = v.duration; URL.revokeObjectURL(v.src);
+        if (!isFinite(d) || d <= 0) reject(new Error("This phone can't read how long the video is."));
+        else resolve({ duration: d, w: v.videoWidth, h: v.videoHeight });
+      };
+      v.onerror = () => { URL.revokeObjectURL(v.src); reject(new Error("This phone's browser can't play that video.")); };
+      v.src = URL.createObjectURL(f);
+    });
+  }
+
+  function pickMime() {
+    const list = [
+      ["video/mp4;codecs=avc1.42E01F,mp4a.40.2", "mp4"], ["video/mp4;codecs=avc1,mp4a", "mp4"], ["video/mp4", "mp4"],
+      ["video/webm;codecs=vp9,opus", "webm"], ["video/webm;codecs=vp8,opus", "webm"], ["video/webm", "webm"]
+    ];
+    if (window.MediaRecorder) for (const [m, ext] of list) if (MediaRecorder.isTypeSupported(m)) return { mime: m, ext };
+    return { mime: "", ext: "mp4" };
+  }
+
+  // Re-records a video by playing it once (silently) into a canvas + MediaRecorder.
+  // Must be called straight from a tap: phones only allow sound and playback then.
+  // p = { w, h, fps, videoK, audioK }. Returns { promise -> {blob, ext}, cancel() }.
+  function recordVideo(file, p, onTick) {
+    let cancelFn = () => {};
+    const promise = new Promise((resolve, reject) => {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      const ctx = new AC();
+      const v = document.createElement("video");
+      v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(file);
+      const canvas = document.createElement("canvas"); canvas.width = p.w; canvas.height = p.h;
+      const g = canvas.getContext("2d");
+      const stream = canvas.captureStream(p.fps);
+      const dest = ctx.createMediaStreamDestination();
+      try { ctx.createMediaElementSource(v).connect(dest); } catch (e) {}
+      dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+      const { mime, ext } = pickMime();
+      const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: p.videoK * 1000, audioBitsPerSecond: p.audioK * 1000 }, mime ? { mimeType: mime } : {}));
+      const chunks = []; let cancelled = false, failMsg = null, wake = null, timer = 0;
+      rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+
+      const draw = () => { if (v.readyState >= 2) g.drawImage(v, 0, 0, p.w, p.h); };
+      const loop = () => {
+        if (rec.state === "inactive") return;
+        draw();
+        if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop); else requestAnimationFrame(loop);
+      };
+      const onVis = () => {
+        if (document.hidden) { if (rec.state === "recording") rec.pause(); v.pause(); }
+        else if (rec.state === "paused") { v.play().then(() => rec.resume()).catch(() => {}); }
+      };
+      document.addEventListener("visibilitychange", onVis);
+      if (navigator.wakeLock) navigator.wakeLock.request("screen").then((w) => (wake = w)).catch(() => {});
+
+      const cleanup = () => {
+        clearInterval(timer); document.removeEventListener("visibilitychange", onVis);
+        try { wake && wake.release(); } catch (e) {}
+        try { v.pause(); } catch (e) {}
+        URL.revokeObjectURL(v.src); stream.getTracks().forEach((t) => t.stop()); ctx.close().catch(() => {});
+      };
+      const finish = () => {
+        cleanup();
+        if (cancelled) reject({ cancelled: true });
+        else if (failMsg) reject(new Error(failMsg));
+        else resolve({ blob: new Blob(chunks, { type: (mime || "video/mp4").split(";")[0] }), ext });
+      };
+      const stop = () => { if (rec.state !== "inactive") rec.stop(); else finish(); };
+      rec.onstop = finish;
+      v.onended = () => { draw(); setTimeout(stop, 150); };
+      v.onerror = () => { failMsg = "The video stopped playing partway, so it couldn't be finished."; stop(); };
+      timer = setInterval(() => onTick && onTick(v.currentTime || 0, v.duration || 0, rec.state === "paused"), 500);
+      cancelFn = () => { cancelled = true; stop(); };
+
+      ctx.resume().catch(() => {});
+      v.play().then(() => { rec.start(1000); loop(); }).catch(() => {
+        failMsg = "The phone didn't let the video play. Tap the button again."; finish();
+      });
+    });
+    return { promise, cancel: () => cancelFn() };
+  }
+
+  // =====================================================================
+  // SHRINK
+  // =====================================================================
   let file = null, meta = null, limitMB = 10, run = null, result = null, budgetScale = 1;
 
-  const fmtMB = (b) => (b / MB).toFixed(b < 10 * MB ? 1 : 0) + " MB";
-  const fmtTime = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
-
-  // ---------- picking ----------
   $("file").addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) loadFile(f); });
 
   function loadFile(f) {
@@ -171,24 +358,16 @@ body { margin: 0; }
     $("result").hidden = true; $("pickErr").hidden = true;
     $("pickLabel").textContent = "Pick a different video";
     $("fname").textContent = f.name; $("fsize").textContent = fmtMB(f.size);
-    $("flen").textContent = "…"; $("fres").textContent = "…"; $("info").hidden = false;
-    const v = document.createElement("video");
-    v.preload = "metadata"; v.muted = true; v.playsInline = true;
-    v.onloadedmetadata = () => {
-      let d = v.duration;
-      if (!isFinite(d) || d <= 0) { showPickErr("This phone can't read how long the video is. Try a different video."); return; }
-      meta = { duration: d, w: v.videoWidth, h: v.videoHeight };
-      $("flen").textContent = fmtTime(d); $("fres").textContent = Math.min(meta.w, meta.h) + "p";
-      URL.revokeObjectURL(v.src); updatePlan();
-    };
-    v.onerror = () => showPickErr("This phone's browser can't play that video, so it can't compress it. Try another video.");
-    v.src = URL.createObjectURL(f);
+    $("flen").textContent = "..."; $("fres").textContent = "..."; $("info").hidden = false;
+    readVideoMeta(f).then((m) => {
+      if (file !== f) return;
+      meta = m; $("flen").textContent = fmtTime(m.duration); $("fres").textContent = Math.min(m.w, m.h) + "p"; updatePlan();
+    }).catch((e) => { if (file === f) showPickErr(e.message + " Try a different video."); });
   }
   function showPickErr(t) { $("pickErr").textContent = t; $("pickErr").hidden = false; $("info").hidden = true; meta = null; updatePlan(); }
 
-  // ---------- size limit ----------
-  document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
-    document.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+  document.querySelectorAll("#viewShrink .chip").forEach((c) => c.addEventListener("click", () => {
+    document.querySelectorAll("#viewShrink .chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
     const custom = c.dataset.mb === "custom";
     $("customRow").hidden = !custom;
     if (custom) { $("customMb").focus(); limitMB = parseFloat($("customMb").value) || 0; } else limitMB = +c.dataset.mb;
@@ -196,7 +375,7 @@ body { margin: 0; }
   }));
   $("customMb").addEventListener("input", () => { limitMB = parseFloat($("customMb").value) || 0; budgetScale = 1; updatePlan(); });
 
-  // ---------- planning (same rules as the Windows tool) ----------
+  // Same sizing rules as the Windows tool.
   function makePlan() {
     if (!meta || !(limitMB >= 1)) return null;
     const limit = limitMB * MB;
@@ -217,91 +396,30 @@ body { margin: 0; }
     if (!(limitMB >= 1)) { el.textContent = "Type a size of 1 MB or more."; return; }
     if (p.alreadySmall) { el.className = "note good"; el.textContent = "This video is already under " + limitMB + " MB. You can upload it as it is."; return; }
     if (p.videoK < 60) { el.className = "note bad"; el.textContent = "At " + fmtTime(meta.duration) + " long, this video is too long to look watchable at " + limitMB + " MB. Pick a bigger limit or trim it first."; return; }
+    if (!canRecord) { el.className = "note bad"; el.textContent = "This browser can't record video. Open this page in Chrome (Android) or Safari (iPhone)."; return; }
     el.textContent = "It will come out at " + Math.min(p.w, p.h) + "p, 30 fps, about " + (p.videoK >= 1000 ? (p.videoK / 1000).toFixed(1) + " Mbps" : p.videoK + " kbps") + ". Takes about " + fmtTime(meta.duration) + ".";
     if (p.videoK < 250) { el.className = "note warn"; el.textContent += " It will look rough at this size."; }
-    $("go").disabled = !window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream;
-    if ($("go").disabled) { el.className = "note bad"; el.textContent = "This browser can't record video. Open this page in Chrome (Android) or Safari (iPhone)."; }
+    $("go").disabled = !!run;
   }
 
-  function pickMime() {
-    const list = [
-      ["video/mp4;codecs=avc1.42E01F,mp4a.40.2", "mp4"], ["video/mp4;codecs=avc1,mp4a", "mp4"], ["video/mp4", "mp4"],
-      ["video/webm;codecs=vp9,opus", "webm"], ["video/webm;codecs=vp8,opus", "webm"], ["video/webm", "webm"]
-    ];
-    for (const [m, ext] of list) if (MediaRecorder.isTypeSupported(m)) return { mime: m, ext };
-    return { mime: "", ext: "mp4" };
-  }
-
-  // ---------- compressing ----------
   $("go").addEventListener("click", start);
-  $("smaller").addEventListener("click", () => { start(); });
-  $("customMb").addEventListener("change", updatePlan);
+  $("smaller").addEventListener("click", start);
   $("cancel").addEventListener("click", () => { if (run) run.cancel(); });
 
   function start() {
     const p = makePlan(); if (!p || p.alreadySmall || p.videoK < 60 || run) return;
     $("result").hidden = true; $("progress").hidden = false; $("go").disabled = true;
-    $("barFill").style.width = "0%"; $("pText").textContent = "Starting…"; $("pTime").textContent = "";
-
-    // Everything below up to play() runs inside the tap, which phones need for sound and playback.
-    const AC = window.AudioContext || window.webkitAudioContext;
-    const ctx = new AC();
-    const v = document.createElement("video");
-    v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(file);
-    const canvas = document.createElement("canvas"); canvas.width = p.w; canvas.height = p.h;
-    const g = canvas.getContext("2d");
-    const stream = canvas.captureStream(p.fps);
-    const dest = ctx.createMediaStreamDestination();
-    try { ctx.createMediaElementSource(v).connect(dest); } catch (e) {}
-    dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
-    const { mime, ext } = pickMime();
-    const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: p.videoK * 1000, audioBitsPerSecond: p.audioK * 1000 }, mime ? { mimeType: mime } : {}));
-    const chunks = []; let cancelled = false, wake = null, timer = 0;
-    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
-
-    const draw = () => { if (v.readyState >= 2) g.drawImage(v, 0, 0, p.w, p.h); };
-    const loop = () => {
-      if (rec.state === "inactive") return;
-      draw();
-      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop); else requestAnimationFrame(loop);
-    };
-    const onVis = () => {
-      if (document.hidden) { if (rec.state === "recording") rec.pause(); v.pause(); }
-      else if (rec.state === "paused") { v.play().then(() => rec.resume()).catch(() => {}); }
-    };
-    document.addEventListener("visibilitychange", onVis);
-    if (navigator.wakeLock) navigator.wakeLock.request("screen").then((w) => (wake = w)).catch(() => {});
-
-    const cleanup = () => {
-      clearInterval(timer); document.removeEventListener("visibilitychange", onVis);
-      try { wake && wake.release(); } catch (e) {}
-      try { v.pause(); } catch (e) {}
-      URL.revokeObjectURL(v.src); stream.getTracks().forEach((t) => t.stop()); ctx.close().catch(() => {});
-      run = null; $("progress").hidden = true; updatePlan();
-    };
-
-    rec.onstop = () => {
-      cleanup();
-      if (cancelled) return;
-      const blob = new Blob(chunks, { type: (mime || "video/mp4").split(";")[0] });
-      showResult(blob, ext, p);
-    };
-    v.onended = () => { draw(); setTimeout(() => rec.state !== "inactive" && rec.stop(), 150); };
-    v.onerror = () => { cancelled = true; if (rec.state !== "inactive") rec.stop(); else cleanup(); showFail("The video stopped playing partway, so it couldn't be compressed."); };
-
-    timer = setInterval(() => {
-      const d = meta.duration, t = v.currentTime || 0;
+    $("barFill").style.width = "0%"; $("pText").textContent = "Starting..."; $("pTime").textContent = "";
+    run = recordVideo(file, p, (t, d, paused) => {
+      d = d || meta.duration;
       $("barFill").style.width = Math.min(100, (t / d) * 100).toFixed(1) + "%";
-      $("pText").textContent = rec.state === "paused" ? "Paused while the screen was away" : "Compressing… " + Math.floor((t / d) * 100) + "%";
+      $("pText").textContent = paused ? "Paused while the screen was away" : "Compressing... " + Math.floor((t / d) * 100) + "%";
       $("pTime").textContent = fmtTime(d - t) + " left";
-    }, 500);
-
-    run = { cancel() { cancelled = true; if (rec.state !== "inactive") rec.stop(); else cleanup(); } };
-
-    ctx.resume().catch(() => {});
-    v.play().then(() => { rec.start(1000); loop(); }).catch(() => {
-      cancelled = true; cleanup(); showFail("The phone didn't let the video play. Tap Compress video again.");
     });
+    run.promise
+      .then((r) => showResult(r.blob, r.ext, p))
+      .catch((e) => { if (!e || !e.cancelled) showFail(e.message); })
+      .finally(() => { run = null; $("progress").hidden = true; updatePlan(); });
   }
 
   function showFail(t) { $("result").hidden = false; $("rText").className = "note bad"; $("rText").textContent = t; $("rVideo").hidden = true; $("save").hidden = true; $("smaller").hidden = true; $("saveNote").hidden = true; }
@@ -324,19 +442,363 @@ body { margin: 0; }
     if (over || roomy) budgetScale *= Math.min(3, Math.max(0.5, (p.limit / blob.size) * 0.9));
   }
 
-  // ---------- saving: a normal browser download into the phone's Download folder ----------
   $("save").addEventListener("click", () => {
     if (!result) return;
-    const note = $("saveNote"); note.hidden = false; note.className = "note good";
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(result.blob);
-    a.download = file.name.replace(/\.[^.]+$/, "") + " (" + limitMB + " MB)." + result.ext;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
-    note.textContent = "Saved to your Download folder as “" + a.download + "”.";
+    const name = baseName(file.name) + " (" + limitMB + " MB)." + result.ext;
+    saveBlob(result.blob, name);
+    $("saveNote").hidden = false; $("saveNote").className = "note good";
+    $("saveNote").textContent = "Saved to your Download folder as “" + name + "”.";
   });
 
-  window.__vc = { loadFile }; // used for testing only
+  // =====================================================================
+  // CONVERT
+  // =====================================================================
+  const recExt = pickMime().ext;
+  const FORMATS = {
+    image: [
+      { id: "jpg", label: "JPG", sub: "Photos, works everywhere" },
+      { id: "png", label: "PNG", sub: "Sharp edges, see-through parts" },
+      { id: "webp", label: "WebP", sub: "Smaller, modern sites" }
+    ],
+    video: [
+      { id: "vid", label: recExt.toUpperCase(), sub: recExt === "mp4" ? "Plays everywhere" : "This phone can't make MP4" },
+      { id: "gif", label: "GIF", sub: "First 15 s, no sound" },
+      { id: "mp3", label: "MP3", sub: "Just the sound" },
+      { id: "wav", label: "WAV", sub: "Sound, full quality" }
+    ],
+    audio: [
+      { id: "mp3", label: "MP3", sub: "Small, plays everywhere" },
+      { id: "wav", label: "WAV", sub: "Full quality, big file" }
+    ]
+  };
+  let cfiles = [], ckind = null, cfmt = null, cmeta = null, cjob = null;
+
+  function kindOf(f) {
+    const t = f.type || "", n = f.name || "";
+    if (t.startsWith("image/") || /\.(heic|heif|jpe?g|png|webp|gif|bmp|avif|tiff?)$/i.test(n)) return "image";
+    if (t.startsWith("video/") || /\.(mp4|mov|m4v|webm|mkv|3gp|avi)$/i.test(n)) return "video";
+    if (t.startsWith("audio/") || /\.(mp3|m4a|aac|wav|ogg|oga|opus|flac|amr)$/i.test(n)) return "audio";
+    return "other";
+  }
+
+  $("cfile").addEventListener("change", (e) => { const fs = Array.from(e.target.files || []); if (fs.length) setConvertFiles(fs); });
+
+  function setConvertFiles(fs) {
+    const note = $("cpickNote"); note.hidden = true; note.className = "note";
+    const kinds = new Set(fs.map(kindOf));
+    if (kinds.has("other")) { note.hidden = false; note.className = "note bad"; note.textContent = "That isn't a photo, video or audio file this tool can convert."; fs = fs.filter((f) => kindOf(f) !== "other"); }
+    if (new Set(fs.map(kindOf)).size > 1) { note.hidden = false; note.className = "note bad"; note.textContent = "Pick only photos, or one video, or audio files, not a mix."; fs = []; }
+    if (fs.length && kindOf(fs[0]) === "video" && fs.length > 1) { note.hidden = false; note.className = "note warn"; note.textContent = "Videos are converted one at a time, so only the first one is used."; fs = fs.slice(0, 1); }
+    cfiles = fs; ckind = fs.length ? kindOf(fs[0]) : null; cmeta = null;
+    $("cres").innerHTML = ""; $("cmsg").hidden = true;
+    const list = $("clist"); list.innerHTML = ""; list.hidden = !fs.length;
+    fs.slice(0, 20).forEach((f) => {
+      const li = document.createElement("li");
+      const a = document.createElement("span"); a.textContent = f.name;
+      const b = document.createElement("span"); b.textContent = fmtSize(f.size);
+      li.append(a, b); list.appendChild(li);
+    });
+    if (fs.length > 20) { const li = document.createElement("li"); li.textContent = "and " + (fs.length - 20) + " more"; list.appendChild(li); }
+    $("cpickLabel").textContent = fs.length ? "Pick different files" : "Tap to pick photos, a video or audio";
+    if (ckind === "video") readVideoMeta(fs[0]).then((m) => { if (cfiles[0] === fs[0]) { cmeta = m; updateConvert(); } }).catch(() => {});
+    renderFormats();
+  }
+
+  function renderFormats() {
+    const box = $("cfmts"); box.innerHTML = "";
+    const list = ckind ? FORMATS[ckind] : [];
+    if (!list.some((f) => f.id === cfmt)) cfmt = list.length ? list[0].id : null;
+    list.forEach((f) => {
+      const b = document.createElement("button");
+      b.className = "chip"; b.setAttribute("aria-pressed", String(f.id === cfmt));
+      const l = document.createElement("b"); l.textContent = f.label;
+      const s = document.createElement("span"); s.textContent = f.sub;
+      b.append(l, s);
+      b.addEventListener("click", () => { cfmt = f.id; renderFormats(); });
+      box.appendChild(b);
+    });
+    updateConvert();
+  }
+
+  function updateConvert() {
+    const n = $("cfmtNote"); n.className = "note";
+    $("imgOpts").hidden = ckind !== "image";
+    $("cquality").disabled = cfmt === "png";
+    let ok = !!(cfiles.length && cfmt) && !cjob;
+    if (!cfiles.length) n.textContent = "Pick files to see what they can be converted to.";
+    else if (ckind === "image") n.textContent = cfiles.length + (cfiles.length === 1 ? " photo" : " photos") + " will be converted.";
+    else if (ckind === "video" && cfmt === "vid") {
+      if (!canRecord) { n.className = "note bad"; n.textContent = "This browser can't record video. Open this page in Chrome (Android) or Safari (iPhone)."; ok = false; }
+      else n.textContent = "Keeps the picture up to 1080p. Takes about " + (cmeta ? fmtTime(cmeta.duration) : "as long as the video") + ".";
+    }
+    else if (ckind === "video" && cfmt === "gif") n.textContent = "Makes a GIF up to 480 px wide at 10 frames per second" + (cmeta && cmeta.duration > 15 ? ", from the first 15 seconds." : ".");
+    else n.textContent = cfmt === "mp3" ? "Saves the sound as an MP3 (192 kbps)." : "Saves the sound as a WAV file. These are big: about 10 MB a minute.";
+    $("cgo").disabled = !ok;
+  }
+
+  $("cgo").addEventListener("click", convert);
+  $("ccancel").addEventListener("click", () => { if (cjob) cjob.cancel(); });
+
+  function setProgress(frac, text, right) {
+    $("cbar").style.width = Math.max(0, Math.min(100, frac * 100)).toFixed(1) + "%";
+    $("ctext").textContent = text; $("ctime").textContent = right || "";
+  }
+
+  function convert() {
+    if (!cfiles.length || !cfmt || cjob) return;
+    $("cres").innerHTML = ""; $("cmsg").hidden = true;
+    $("cprog").hidden = false; setProgress(0, "Starting...");
+    $("cprogNote").textContent = ckind === "video" && cfmt === "vid"
+      ? "Keep this screen open until it finishes. It plays the video through once, silently, so it takes about as long as the video."
+      : "Keep this screen open until it finishes.";
+    let cancelled = false;
+    cjob = { cancel: () => { cancelled = true; } };
+    updateConvert();
+    const isCancelled = () => cancelled;
+    let work;
+
+    if (ckind === "video" && cfmt === "vid") {
+      // Must start inside this tap, before anything is awaited.
+      const m = cmeta || { w: 1280, h: 720, duration: 0 };
+      const short = Math.min(m.w, m.h) || 720, scale = Math.min(1, 1080 / short);
+      const even = (x) => Math.max(2, Math.round(x * scale / 2) * 2);
+      const outShort = Math.round(short * scale);
+      const p = { w: even(m.w || 1280), h: even(m.h || 720), fps: 30, videoK: outShort > 720 ? 8000 : outShort > 480 ? 5000 : 2500, audioK: 160 };
+      const rec = recordVideo(cfiles[0], p, (t, d, paused) => {
+        d = d || m.duration || 1;
+        setProgress(t / d, paused ? "Paused while the screen was away" : "Converting... " + Math.floor((t / d) * 100) + "%", fmtTime(d - t) + " left");
+      });
+      cjob.cancel = () => { cancelled = true; rec.cancel(); };
+      work = rec.promise.then((r) => [{ name: baseName(cfiles[0].name) + "." + r.ext, blob: r.blob }]);
+    } else if (ckind === "image") {
+      work = convertImages(cfiles, cfmt, +$("cmax").value, +$("cquality").value, isCancelled);
+    } else if (cfmt === "gif") {
+      work = videoToGif(cfiles[0], isCancelled).then((blob) => [{ name: baseName(cfiles[0].name) + ".gif", blob }]);
+    } else {
+      work = toAudio(cfiles[0], cfmt, isCancelled).then((blob) => [{ name: baseName(cfiles[0].name) + "." + cfmt, blob }]);
+    }
+
+    work.then((items) => {
+      const okItems = items.filter((i) => i.blob);
+      const failed = items.filter((i) => !i.blob);
+      const msg = $("cmsg"); msg.hidden = false;
+      msg.className = failed.length ? "note warn" : "note good";
+      msg.textContent = okItems.length
+        ? "Done: " + okItems.length + (okItems.length === 1 ? " file" : " files") + " ready to save." + (failed.length ? " " + failed.length + " couldn't be converted." : "")
+        : "Nothing could be converted.";
+      if (!okItems.length) msg.className = "note bad";
+      items.forEach(addResult);
+    }).catch((e) => {
+      if (e && e.cancelled) return;
+      const msg = $("cmsg"); msg.hidden = false; msg.className = "note bad"; msg.textContent = (e && e.message) || "Something went wrong while converting.";
+    }).finally(() => { cjob = null; $("cprog").hidden = true; updateConvert(); });
+  }
+
+  function addResult(item) {
+    const li = document.createElement("li");
+    const title = document.createElement("p"); title.className = "fname";
+    title.textContent = item.name + (item.blob ? "  (" + fmtSize(item.blob.size) + ")" : "");
+    li.appendChild(title);
+    if (!item.blob) {
+      const n = document.createElement("p"); n.className = "note bad"; n.textContent = item.error || "Couldn't be converted.";
+      li.appendChild(n); $("cres").appendChild(li); return;
+    }
+    if (item.note) { const n = document.createElement("p"); n.className = "note warn"; n.textContent = item.note; li.appendChild(n); }
+    const url = URL.createObjectURL(item.blob);
+    const t = item.blob.type;
+    let prev;
+    if (t.startsWith("image/")) { prev = document.createElement("div"); prev.className = "preview"; const im = document.createElement("img"); im.alt = "Preview of " + item.name; im.src = url; prev.appendChild(im); }
+    else if (t.startsWith("video/")) { prev = document.createElement("video"); prev.controls = true; prev.playsInline = true; prev.src = url; }
+    else { prev = document.createElement("audio"); prev.controls = true; prev.src = url; }
+    li.appendChild(prev);
+    const btn = document.createElement("button"); btn.className = "primary"; btn.textContent = "Save to phone";
+    const done = document.createElement("p"); done.className = "note good"; done.hidden = true;
+    btn.addEventListener("click", () => { saveBlob(item.blob, item.name); done.hidden = false; done.textContent = "Saved to your Download folder."; });
+    li.append(btn, done);
+    $("cres").appendChild(li);
+  }
+
+  // ---------- photos ----------
+  async function decodeImage(f) {
+    try { return await createImageBitmap(f, { imageOrientation: "from-image" }); } catch (e) {}
+    try { return await createImageBitmap(f); } catch (e) {}
+    const url = URL.createObjectURL(f);
+    try {
+      const im = new Image(); im.src = url; await im.decode(); return im;
+    } finally { setTimeout(() => URL.revokeObjectURL(url), 1000); }
+  }
+
+  async function convertImages(files, fmt, maxSide, quality, isCancelled) {
+    const mime = { jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[fmt];
+    const out = [];
+    for (let i = 0; i < files.length; i++) {
+      if (isCancelled()) throw { cancelled: true };
+      const f = files[i];
+      setProgress(i / files.length, "Converting " + (i + 1) + " of " + files.length + "...");
+      let img;
+      try { img = await decodeImage(f); }
+      catch (e) {
+        out.push({ name: f.name, error: /\.hei[cf]$/i.test(f.name) ? "This phone's browser can't open HEIC photos. On iPhone, use Safari." : "This phone's browser can't open this picture." });
+        continue;
+      }
+      const w0 = img.width || img.naturalWidth, h0 = img.height || img.naturalHeight;
+      const s = maxSide ? Math.min(1, maxSide / Math.max(w0, h0)) : 1;
+      const c = document.createElement("canvas");
+      c.width = Math.max(1, Math.round(w0 * s)); c.height = Math.max(1, Math.round(h0 * s));
+      const g = c.getContext("2d");
+      if (fmt === "jpg") { g.fillStyle = "#ffffff"; g.fillRect(0, 0, c.width, c.height); }
+      g.imageSmoothingQuality = "high";
+      g.drawImage(img, 0, 0, c.width, c.height);
+      if (img.close) img.close();
+      const blob = await new Promise((r) => c.toBlob(r, mime, fmt === "png" ? undefined : quality));
+      if (!blob) { out.push({ name: f.name, error: "This picture is too big for this phone to convert. Try a smaller picture size." }); continue; }
+      let ext = fmt, note = null;
+      if (blob.type !== mime) { ext = blob.type === "image/png" ? "png" : "jpg"; note = "This phone can't make " + fmt.toUpperCase() + " files, so it was saved as " + ext.toUpperCase() + "."; }
+      out.push({ name: baseName(f.name) + "." + ext, blob, note });
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    setProgress(1, "Finishing...");
+    return out;
+  }
+
+  // ---------- video to GIF ----------
+  const BAYER = [0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5];
+  function gifPalette() {
+    const p = new Uint8Array(256 * 3);
+    for (let r = 0; r < 6; r++) for (let g = 0; g < 7; g++) for (let b = 0; b < 6; b++) {
+      const i = (r * 42 + g * 6 + b) * 3;
+      p[i] = r * 51; p[i + 1] = Math.round(g * 42.5); p[i + 2] = b * 51;
+    }
+    return p;
+  }
+  function quantize(d, W, H) {
+    const out = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const i = y * W + x, o = i * 4, t = BAYER[((y & 3) << 2) | (x & 3)] / 16 - 0.5;
+      let r = Math.round((d[o] + t * 51) / 51), g = Math.round((d[o + 1] + t * 42.5) / 42.5), b = Math.round((d[o + 2] + t * 51) / 51);
+      r = r < 0 ? 0 : r > 5 ? 5 : r; g = g < 0 ? 0 : g > 6 ? 6 : g; b = b < 0 ? 0 : b > 5 ? 5 : b;
+      out[i] = r * 42 + g * 6 + b;
+    }
+    return out;
+  }
+  function lzw(indices) {
+    const out = []; const minCode = 8, clear = 256, eoi = 257;
+    let codeSize = 9, next = 258, cur = 0, curBits = 0;
+    let dict = new Map();
+    const emit = (c) => { cur |= c << curBits; curBits += codeSize; while (curBits >= 8) { out.push(cur & 255); cur >>>= 8; curBits -= 8; } };
+    emit(clear);
+    let prefix = indices[0];
+    for (let i = 1; i < indices.length; i++) {
+      const k = indices[i], key = (prefix << 8) | k, v = dict.get(key);
+      if (v !== undefined) { prefix = v; continue; }
+      emit(prefix);
+      if (next < 4096) { dict.set(key, next++); if (next > (1 << codeSize) && codeSize < 12) codeSize++; }
+      else { emit(clear); dict = new Map(); codeSize = minCode + 1; next = 258; }
+      prefix = k;
+    }
+    emit(prefix); emit(eoi);
+    if (curBits > 0) out.push(cur & 255);
+    const blocks = [minCode];
+    for (let i = 0; i < out.length; i += 255) { const n = Math.min(255, out.length - i); blocks.push(n); for (let j = 0; j < n; j++) blocks.push(out[i + j]); }
+    blocks.push(0);
+    return new Uint8Array(blocks);
+  }
+  async function videoToGif(f, isCancelled) {
+    const v = document.createElement("video");
+    v.muted = true; v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(f);
+    try {
+      await new Promise((res, rej) => { v.onloadeddata = res; v.onerror = () => rej(new Error("This phone's browser can't play that video.")); });
+      const fps = 10, dur = Math.min(v.duration || 0, 15);
+      if (!(dur > 0)) throw new Error("This phone can't read how long the video is.");
+      const W = Math.max(2, Math.min(480, v.videoWidth) & ~1), H = Math.max(2, Math.round(W * v.videoHeight / v.videoWidth) & ~1);
+      const c = document.createElement("canvas"); c.width = W; c.height = H;
+      const g = c.getContext("2d", { willReadFrequently: true });
+      const parts = [];
+      const hdr = new Uint8Array([0x47, 0x49, 0x46, 0x38, 0x39, 0x61, W & 255, W >> 8, H & 255, H >> 8, 0xF7, 0, 0]);
+      const loop = new Uint8Array([0x21, 0xFF, 0x0B, 0x4E, 0x45, 0x54, 0x53, 0x43, 0x41, 0x50, 0x45, 0x32, 0x2E, 0x30, 0x03, 0x01, 0, 0, 0]);
+      parts.push(hdr, gifPalette(), loop);
+      const n = Math.max(1, Math.floor(dur * fps));
+      for (let i = 0; i < n; i++) {
+        if (isCancelled()) throw { cancelled: true };
+        await new Promise((res) => { const to = setTimeout(res, 3000); v.onseeked = () => { clearTimeout(to); res(); }; v.currentTime = (i + 0.5) / fps; });
+        g.drawImage(v, 0, 0, W, H);
+        const idx = quantize(g.getImageData(0, 0, W, H).data, W, H);
+        parts.push(new Uint8Array([0x21, 0xF9, 0x04, 0x04, 10, 0, 0, 0]));
+        parts.push(new Uint8Array([0x2C, 0, 0, 0, 0, W & 255, W >> 8, H & 255, H >> 8, 0]));
+        parts.push(lzw(idx));
+        setProgress((i + 1) / n, "Making GIF... frame " + (i + 1) + " of " + n);
+      }
+      parts.push(new Uint8Array([0x3B]));
+      return new Blob(parts, { type: "image/gif" });
+    } finally { URL.revokeObjectURL(v.src); }
+  }
+
+  // ---------- sound to MP3 / WAV ----------
+  async function decodeAudio(f) {
+    setProgress(0.05, "Reading the sound...");
+    const buf = await f.arrayBuffer();
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    try {
+      return await new Promise((res, rej) => { const p = ctx.decodeAudioData(buf, res, rej); if (p && p.then) p.then(res, rej); });
+    } catch (e) {
+      throw new Error("This file has no sound this phone can read.");
+    } finally { ctx.close().catch(() => {}); }
+  }
+  function toInt16(f32) {
+    const o = new Int16Array(f32.length);
+    for (let i = 0; i < f32.length; i++) { const s = Math.max(-1, Math.min(1, f32[i])); o[i] = s < 0 ? s * 0x8000 : s * 0x7FFF; }
+    return o;
+  }
+  function toWav(ab) {
+    const ch = Math.min(2, ab.numberOfChannels), len = ab.length, rate = ab.sampleRate;
+    const data = new DataView(new ArrayBuffer(44 + len * ch * 2));
+    const str = (o, s) => { for (let i = 0; i < s.length; i++) data.setUint8(o + i, s.charCodeAt(i)); };
+    str(0, "RIFF"); data.setUint32(4, 36 + len * ch * 2, true); str(8, "WAVE"); str(12, "fmt ");
+    data.setUint32(16, 16, true); data.setUint16(20, 1, true); data.setUint16(22, ch, true);
+    data.setUint32(24, rate, true); data.setUint32(28, rate * ch * 2, true); data.setUint16(32, ch * 2, true); data.setUint16(34, 16, true);
+    str(36, "data"); data.setUint32(40, len * ch * 2, true);
+    const chans = []; for (let c = 0; c < ch; c++) chans.push(ab.getChannelData(c));
+    let o = 44;
+    for (let i = 0; i < len; i++) for (let c = 0; c < ch; c++) { const s = Math.max(-1, Math.min(1, chans[c][i])); data.setInt16(o, s < 0 ? s * 0x8000 : s * 0x7FFF, true); o += 2; }
+    return new Blob([data.buffer], { type: "audio/wav" });
+  }
+  let lamePromise = null;
+  function loadLame() {
+    if (window.lamejs) return Promise.resolve();
+    if (!lamePromise) lamePromise = new Promise((res, rej) => {
+      const s = document.createElement("script");
+      s.src = "https://cdnjs.cloudflare.com/ajax/libs/lamejs/1.2.1/lame.min.js";
+      s.onload = () => window.lamejs ? res() : rej();
+      s.onerror = () => { lamePromise = null; s.remove(); rej(); };
+      document.head.appendChild(s);
+    });
+    return lamePromise.catch(() => { throw new Error("Making MP3 needs an internet connection the first time. Connect and try again, or pick WAV."); });
+  }
+  async function toMp3(ab, isCancelled) {
+    await loadLame();
+    const ch = Math.min(2, ab.numberOfChannels);
+    const L = toInt16(ab.getChannelData(0)), R = ch > 1 ? toInt16(ab.getChannelData(1)) : null;
+    const enc = new window.lamejs.Mp3Encoder(ch, ab.sampleRate, 192);
+    const parts = [], step = 1152 * 40;
+    for (let i = 0; i < L.length; i += step) {
+      if (isCancelled()) throw { cancelled: true };
+      const buf = R ? enc.encodeBuffer(L.subarray(i, i + step), R.subarray(i, i + step)) : enc.encodeBuffer(L.subarray(i, i + step));
+      if (buf.length) parts.push(new Uint8Array(buf));
+      setProgress(0.1 + 0.9 * (i / L.length), "Making MP3... " + Math.floor((i / L.length) * 100) + "%");
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    const end = enc.flush(); if (end.length) parts.push(new Uint8Array(end));
+    return new Blob(parts, { type: "audio/mpeg" });
+  }
+  async function toAudio(f, fmt, isCancelled) {
+    const ab = await decodeAudio(f);
+    if (isCancelled()) throw { cancelled: true };
+    if (fmt === "wav") { setProgress(0.6, "Making WAV..."); return toWav(ab); }
+    return toMp3(ab, isCancelled);
+  }
+
+  window.__vc = { loadFile, setConvertFiles }; // used for testing only
 })();
 </script>
 </body>

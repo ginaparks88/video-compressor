@@ -1,0 +1,343 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0b6e63">
+<title>Video Compressor</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: one narrow column of three steps, thumb-sized controls, result replaces the steps' end. */
+:root {
+  --bg: #eef2f1;
+  --panel: #ffffff;
+  --ink: #15211f;
+  --muted: #5b6b68;
+  --line: #d3dcda;
+  --accent: #0b6e63;
+  --accent-ink: #ffffff;
+  --accent-soft: #d6ece8;
+  --good: #1d7a3a;
+  --bad: #b3261e;
+  --warn: #8a5a00;
+  --font-display: "Space Grotesk", "Segoe UI", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101716; --panel: #18211f; --ink: #e5eeec; --muted: #9aaba7; --line: #2b3835;
+    --accent: #3fc1ae; --accent-ink: #062420; --accent-soft: #173a35;
+    --good: #5fd27f; --bad: #ff8a80; --warn: #f0c060; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101716; --panel: #18211f; --ink: #e5eeec; --muted: #9aaba7; --line: #2b3835;
+  --accent: #3fc1ae; --accent-ink: #062420; --accent-soft: #173a35;
+  --good: #5fd27f; --bad: #ff8a80; --warn: #f0c060; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+main { max-width: 520px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+header h1 { font-family: var(--font-display); font-size: 1.75rem; line-height: 1.15; margin: 0; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); }
+section { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+section h2 { font-family: var(--font-display); font-size: 1.05rem; margin: 0; display: flex; gap: 10px; align-items: center; }
+.step { font-family: var(--font-display); font-size: 0.8rem; width: 24px; height: 24px; border-radius: 50%; display: inline-grid; place-items: center; background: var(--accent-soft); color: var(--accent); flex: none; }
+button, .pick { font: inherit; font-weight: 600; border-radius: 10px; min-height: 48px; padding: 10px 16px; cursor: pointer; border: 1px solid var(--line); background: var(--panel); color: var(--ink); }
+button:focus-visible, .pick:focus-within, input:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); width: 100%; }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+.pick { display: flex; align-items: center; justify-content: center; text-align: center; border-style: dashed; border-width: 2px; min-height: 64px; }
+.pick input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+.facts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0; }
+.facts div { background: var(--bg); border-radius: 8px; padding: 8px 10px; min-width: 0; }
+.facts dt { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.facts dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.fname { font-weight: 600; overflow-wrap: anywhere; margin: 0; }
+.chips { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.chip { text-align: left; display: flex; flex-direction: column; gap: 0; line-height: 1.25; }
+.chip b { font-family: var(--font-display); font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.chip span { font-weight: 400; font-size: 0.85rem; color: var(--muted); }
+.chip[aria-pressed="true"] { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent); }
+.custom { display: flex; gap: 8px; align-items: center; }
+.custom input { font: inherit; min-height: 48px; width: 100%; padding: 8px 12px; border-radius: 10px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.note { font-size: 0.9rem; color: var(--muted); margin: 0; }
+.note.bad { color: var(--bad); }
+.note.warn { color: var(--warn); }
+.note.good { color: var(--good); font-weight: 600; }
+.bar { height: 10px; border-radius: 6px; background: var(--bg); overflow: hidden; border: 1px solid var(--line); }
+.bar i { display: block; height: 100%; width: 0%; background: var(--accent); transition: width 0.3s linear; }
+.row { display: flex; justify-content: space-between; gap: 12px; font-variant-numeric: tabular-nums; font-size: 0.9rem; color: var(--muted); }
+video { width: 100%; max-height: 50vh; border-radius: 10px; background: #000; }
+.actions { display: flex; flex-direction: column; gap: 8px; }
+.how { font-size: 0.85rem; color: var(--muted); }
+.how summary { cursor: pointer; font-weight: 600; color: var(--ink); }
+.how ul { padding-left: 1.2em; margin: 8px 0 0; }
+@media (prefers-reduced-motion: reduce) { .bar i { transition: none; } }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body { margin: 0; }
+[hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<main>
+  <header>
+    <h1>Video Compressor</h1>
+    <p>Shrink a video to fit an upload limit. It all happens on this phone, so nothing gets uploaded.</p>
+  </header>
+
+  <section aria-labelledby="h-pick">
+    <h2 id="h-pick"><span class="step">1</span>Choose a video</h2>
+    <label class="pick" for="file">
+      <input id="file" type="file" accept="video/*">
+      <span id="pickLabel">Tap to pick from your gallery or files</span>
+    </label>
+    <div id="info" hidden>
+      <p class="fname" id="fname"></p>
+      <dl class="facts">
+        <div><dt>Size</dt><dd id="fsize">–</dd></div>
+        <div><dt>Length</dt><dd id="flen">–</dd></div>
+        <div><dt>Picture</dt><dd id="fres">–</dd></div>
+      </dl>
+    </div>
+    <p class="note bad" id="pickErr" hidden></p>
+  </section>
+
+  <section aria-labelledby="h-size">
+    <h2 id="h-size"><span class="step">2</span>Size limit</h2>
+    <div class="chips" role="group" aria-label="Size limit">
+      <button class="chip" id="p10" data-mb="10" aria-pressed="true"><b>10 MB</b><span>Discord (free)</span></button>
+      <button class="chip" id="p18" data-mb="18" aria-pressed="false"><b>18 MB</b><span>Email (25 MB limit)</span></button>
+      <button class="chip" id="p50" data-mb="50" aria-pressed="false"><b>50 MB</b><span>Discord Nitro Basic</span></button>
+      <button class="chip" id="pc" data-mb="custom" aria-pressed="false"><b>Custom</b><span>Type your own</span></button>
+    </div>
+    <div class="custom" id="customRow" hidden>
+      <input id="customMb" type="number" inputmode="decimal" min="1" step="1" placeholder="Size in MB, e.g. 25" aria-label="Custom size limit in MB">
+    </div>
+    <p class="note" id="plan">Pick a video to see how it will be compressed.</p>
+  </section>
+
+  <section aria-labelledby="h-go">
+    <h2 id="h-go"><span class="step">3</span>Compress</h2>
+    <button class="primary" id="go" disabled>Compress video</button>
+    <div id="progress" hidden>
+      <div class="bar" aria-hidden="true"><i id="barFill"></i></div>
+      <div class="row"><span id="pText">Starting…</span><span id="pTime"></span></div>
+      <p class="note">Keep this screen open until it finishes. It plays the video through once, silently, so it takes about as long as the video.</p>
+      <button id="cancel">Cancel</button>
+    </div>
+    <div id="result" hidden>
+      <p class="note" id="rText"></p>
+      <video id="rVideo" controls playsinline></video>
+      <div class="actions">
+        <button class="primary" id="save">Save to phone</button>
+        <button id="smaller" hidden>Try again, a bit smaller</button>
+      </div>
+      <p class="note" id="saveNote" hidden></p>
+    </div>
+  </section>
+
+  <details class="how">
+    <summary>How it works</summary>
+    <ul>
+      <li>It works out the best quality that fits your limit from the video's length.</li>
+      <li>When the limit is tight it makes the picture smaller (720p, 540p, 480p…) and caps it at 30 frames per second. A smaller sharp picture looks better than a blocky full-size one.</li>
+      <li>Your original video is never changed.</li>
+      <li>On iPhone the result is MP4. On Android it is MP4 on recent Chrome, otherwise WebM (Discord plays both).</li>
+    </ul>
+  </details>
+</main>
+
+<script>
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const MB = 1000 * 1000;
+  let file = null, meta = null, limitMB = 10, run = null, result = null, budgetScale = 1;
+
+  const fmtMB = (b) => (b / MB).toFixed(b < 10 * MB ? 1 : 0) + " MB";
+  const fmtTime = (s) => { s = Math.max(0, Math.round(s)); const m = Math.floor(s / 60); return m + ":" + String(s % 60).padStart(2, "0"); };
+
+  // ---------- picking ----------
+  $("file").addEventListener("change", (e) => { const f = e.target.files && e.target.files[0]; if (f) loadFile(f); });
+
+  function loadFile(f) {
+    file = f; meta = null; result = null; budgetScale = 1;
+    $("result").hidden = true; $("pickErr").hidden = true;
+    $("pickLabel").textContent = "Pick a different video";
+    $("fname").textContent = f.name; $("fsize").textContent = fmtMB(f.size);
+    $("flen").textContent = "…"; $("fres").textContent = "…"; $("info").hidden = false;
+    const v = document.createElement("video");
+    v.preload = "metadata"; v.muted = true; v.playsInline = true;
+    v.onloadedmetadata = () => {
+      let d = v.duration;
+      if (!isFinite(d) || d <= 0) { showPickErr("This phone can't read how long the video is. Try a different video."); return; }
+      meta = { duration: d, w: v.videoWidth, h: v.videoHeight };
+      $("flen").textContent = fmtTime(d); $("fres").textContent = Math.min(meta.w, meta.h) + "p";
+      URL.revokeObjectURL(v.src); updatePlan();
+    };
+    v.onerror = () => showPickErr("This phone's browser can't play that video, so it can't compress it. Try another video.");
+    v.src = URL.createObjectURL(f);
+  }
+  function showPickErr(t) { $("pickErr").textContent = t; $("pickErr").hidden = false; $("info").hidden = true; meta = null; updatePlan(); }
+
+  // ---------- size limit ----------
+  document.querySelectorAll(".chip").forEach((c) => c.addEventListener("click", () => {
+    document.querySelectorAll(".chip").forEach((x) => x.setAttribute("aria-pressed", String(x === c)));
+    const custom = c.dataset.mb === "custom";
+    $("customRow").hidden = !custom;
+    if (custom) { $("customMb").focus(); limitMB = parseFloat($("customMb").value) || 0; } else limitMB = +c.dataset.mb;
+    budgetScale = 1; updatePlan();
+  }));
+  $("customMb").addEventListener("input", () => { limitMB = parseFloat($("customMb").value) || 0; budgetScale = 1; updatePlan(); });
+
+  // ---------- planning (same rules as the Windows tool) ----------
+  function makePlan() {
+    if (!meta || !(limitMB >= 1)) return null;
+    const limit = limitMB * MB;
+    const totalK = Math.floor(limit * 8 * 0.9 * budgetScale / meta.duration / 1000);
+    const audioK = totalK >= 1200 ? 128 : totalK >= 400 ? 96 : 48;
+    const videoK = totalK - audioK;
+    const short = videoK >= 4000 ? 1080 : videoK >= 1500 ? 720 : videoK >= 700 ? 540 : videoK >= 350 ? 480 : 360;
+    const srcShort = Math.min(meta.w, meta.h) || short;
+    const scale = Math.min(1, short / srcShort);
+    const even = (n) => Math.max(2, Math.round(n * scale / 2) * 2);
+    return { limit, videoK, audioK, w: even(meta.w || 640), h: even(meta.h || 360), fps: 30, alreadySmall: file.size <= limit };
+  }
+
+  function updatePlan() {
+    const p = makePlan(); const el = $("plan"); el.className = "note";
+    $("go").disabled = true;
+    if (!file || !meta) { el.textContent = "Pick a video to see how it will be compressed."; return; }
+    if (!(limitMB >= 1)) { el.textContent = "Type a size of 1 MB or more."; return; }
+    if (p.alreadySmall) { el.className = "note good"; el.textContent = "This video is already under " + limitMB + " MB. You can upload it as it is."; return; }
+    if (p.videoK < 60) { el.className = "note bad"; el.textContent = "At " + fmtTime(meta.duration) + " long, this video is too long to look watchable at " + limitMB + " MB. Pick a bigger limit or trim it first."; return; }
+    el.textContent = "It will come out at " + Math.min(p.w, p.h) + "p, 30 fps, about " + (p.videoK >= 1000 ? (p.videoK / 1000).toFixed(1) + " Mbps" : p.videoK + " kbps") + ". Takes about " + fmtTime(meta.duration) + ".";
+    if (p.videoK < 250) { el.className = "note warn"; el.textContent += " It will look rough at this size."; }
+    $("go").disabled = !window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream;
+    if ($("go").disabled) { el.className = "note bad"; el.textContent = "This browser can't record video. Open this page in Chrome (Android) or Safari (iPhone)."; }
+  }
+
+  function pickMime() {
+    const list = [
+      ["video/mp4;codecs=avc1.42E01F,mp4a.40.2", "mp4"], ["video/mp4;codecs=avc1,mp4a", "mp4"], ["video/mp4", "mp4"],
+      ["video/webm;codecs=vp9,opus", "webm"], ["video/webm;codecs=vp8,opus", "webm"], ["video/webm", "webm"]
+    ];
+    for (const [m, ext] of list) if (MediaRecorder.isTypeSupported(m)) return { mime: m, ext };
+    return { mime: "", ext: "mp4" };
+  }
+
+  // ---------- compressing ----------
+  $("go").addEventListener("click", start);
+  $("smaller").addEventListener("click", () => { start(); });
+  $("customMb").addEventListener("change", updatePlan);
+  $("cancel").addEventListener("click", () => { if (run) run.cancel(); });
+
+  function start() {
+    const p = makePlan(); if (!p || p.alreadySmall || p.videoK < 60 || run) return;
+    $("result").hidden = true; $("progress").hidden = false; $("go").disabled = true;
+    $("barFill").style.width = "0%"; $("pText").textContent = "Starting…"; $("pTime").textContent = "";
+
+    // Everything below up to play() runs inside the tap, which phones need for sound and playback.
+    const AC = window.AudioContext || window.webkitAudioContext;
+    const ctx = new AC();
+    const v = document.createElement("video");
+    v.playsInline = true; v.preload = "auto"; v.src = URL.createObjectURL(file);
+    const canvas = document.createElement("canvas"); canvas.width = p.w; canvas.height = p.h;
+    const g = canvas.getContext("2d");
+    const stream = canvas.captureStream(p.fps);
+    const dest = ctx.createMediaStreamDestination();
+    try { ctx.createMediaElementSource(v).connect(dest); } catch (e) {}
+    dest.stream.getAudioTracks().forEach((t) => stream.addTrack(t));
+    const { mime, ext } = pickMime();
+    const rec = new MediaRecorder(stream, Object.assign({ videoBitsPerSecond: p.videoK * 1000, audioBitsPerSecond: p.audioK * 1000 }, mime ? { mimeType: mime } : {}));
+    const chunks = []; let cancelled = false, wake = null, timer = 0;
+    rec.ondataavailable = (e) => { if (e.data && e.data.size) chunks.push(e.data); };
+
+    const draw = () => { if (v.readyState >= 2) g.drawImage(v, 0, 0, p.w, p.h); };
+    const loop = () => {
+      if (rec.state === "inactive") return;
+      draw();
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(loop); else requestAnimationFrame(loop);
+    };
+    const onVis = () => {
+      if (document.hidden) { if (rec.state === "recording") rec.pause(); v.pause(); }
+      else if (rec.state === "paused") { v.play().then(() => rec.resume()).catch(() => {}); }
+    };
+    document.addEventListener("visibilitychange", onVis);
+    if (navigator.wakeLock) navigator.wakeLock.request("screen").then((w) => (wake = w)).catch(() => {});
+
+    const cleanup = () => {
+      clearInterval(timer); document.removeEventListener("visibilitychange", onVis);
+      try { wake && wake.release(); } catch (e) {}
+      try { v.pause(); } catch (e) {}
+      URL.revokeObjectURL(v.src); stream.getTracks().forEach((t) => t.stop()); ctx.close().catch(() => {});
+      run = null; $("progress").hidden = true; updatePlan();
+    };
+
+    rec.onstop = () => {
+      cleanup();
+      if (cancelled) return;
+      const blob = new Blob(chunks, { type: (mime || "video/mp4").split(";")[0] });
+      showResult(blob, ext, p);
+    };
+    v.onended = () => { draw(); setTimeout(() => rec.state !== "inactive" && rec.stop(), 150); };
+    v.onerror = () => { cancelled = true; if (rec.state !== "inactive") rec.stop(); else cleanup(); showFail("The video stopped playing partway, so it couldn't be compressed."); };
+
+    timer = setInterval(() => {
+      const d = meta.duration, t = v.currentTime || 0;
+      $("barFill").style.width = Math.min(100, (t / d) * 100).toFixed(1) + "%";
+      $("pText").textContent = rec.state === "paused" ? "Paused while the screen was away" : "Compressing… " + Math.floor((t / d) * 100) + "%";
+      $("pTime").textContent = fmtTime(d - t) + " left";
+    }, 500);
+
+    run = { cancel() { cancelled = true; if (rec.state !== "inactive") rec.stop(); else cleanup(); } };
+
+    ctx.resume().catch(() => {});
+    v.play().then(() => { rec.start(1000); loop(); }).catch(() => {
+      cancelled = true; cleanup(); showFail("The phone didn't let the video play. Tap Compress video again.");
+    });
+  }
+
+  function showFail(t) { $("result").hidden = false; $("rText").className = "note bad"; $("rText").textContent = t; $("rVideo").hidden = true; $("save").hidden = true; $("smaller").hidden = true; $("saveNote").hidden = true; }
+
+  function showResult(blob, ext, p) {
+    result = { blob, ext };
+    const v = $("rVideo"); if (v.src) URL.revokeObjectURL(v.src);
+    v.src = URL.createObjectURL(blob); v.hidden = false;
+    $("result").hidden = false; $("saveNote").hidden = true;
+    const over = blob.size > p.limit;
+    const roomy = !over && blob.size < p.limit * 0.6;
+    $("rText").className = over ? "note warn" : "note good";
+    $("rText").textContent = over
+      ? "It came out at " + fmtMB(blob.size) + ", a little over " + limitMB + " MB. Try again a bit smaller, or save it anyway."
+      : "Done: " + fmtMB(blob.size) + " (was " + fmtMB(file.size) + "). It fits under " + limitMB + " MB." +
+        (roomy ? " There's room to spare, so you can try again for a sharper picture." : "");
+    $("save").hidden = false;
+    $("smaller").hidden = !(over || roomy);
+    $("smaller").textContent = over ? "Try again, a bit smaller" : "Try again, sharper";
+    if (over || roomy) budgetScale *= Math.min(3, Math.max(0.5, (p.limit / blob.size) * 0.9));
+  }
+
+  // ---------- saving: a normal browser download into the phone's Download folder ----------
+  $("save").addEventListener("click", () => {
+    if (!result) return;
+    const note = $("saveNote"); note.hidden = false; note.className = "note good";
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(result.blob);
+    a.download = file.name.replace(/\.[^.]+$/, "") + " (" + limitMB + " MB)." + result.ext;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 60000);
+    note.textContent = "Saved to your Download folder as “" + a.download + "”.";
+  });
+
+  window.__vc = { loadFile }; // used for testing only
+})();
+</script>
+</body>
+</html>
